@@ -13,11 +13,12 @@ ESP32-S3 Pico through an 8-bit 8080 parallel interface.
 ## Repository contents
 
 - [`firmware/`](firmware/) — ESP-IDF v5.5 test application. Its pin map,
-  backlight polarity, RGB byte order, and write clock are configurable in
-  `idf.py menuconfig`.
+  backlight polarity, and write clock are configurable in `idf.py menuconfig`.
 - [`wiring_guide_esp32s3.md`](wiring_guide_esp32s3.md) — required wiring,
   jumper, power, and logic-level guidance.
 - [`esp32s3_pico_pinout.md`](esp32s3_pico_pinout.md) — board-header reference.
+- [`docs/`](docs/) — locally retained SSD1963 and ER-TFT050-6-5654 reference
+  datasheets used for the firmware review and corrections.
 
 ## First bench test
 

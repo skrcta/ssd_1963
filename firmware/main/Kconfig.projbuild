@@ -7,12 +7,6 @@ config HMI_LCD_PCLK_HZ
     help
         Start at 10 MHz for bring-up. Raise only after the wiring is stable.
 
-config HMI_LCD_SWAP_COLOR_BYTES
-    bool "Swap RGB565 byte order on the 8-bit bus"
-    default y
-    help
-        The ESP32-S3 is little-endian and the SSD1963 expects RGB565 MSB first.
-
 config HMI_LCD_BACKLIGHT_ACTIVE_HIGH
     bool "Backlight enable is active high"
     default y
@@ -23,46 +17,102 @@ menu "Display GPIO map"
 
 config HMI_LCD_PIN_D0
     int "DB0 GPIO"
+    range 0 48
     default 2
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_D1
     int "DB1 GPIO"
+    range 0 48
     default 4
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_D2
     int "DB2 GPIO"
+    range 0 48
     default 5
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_D3
     int "DB3 GPIO"
+    range 0 48
     default 6
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_D4
     int "DB4 GPIO"
+    range 0 48
     default 7
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_D5
     int "DB5 GPIO"
+    range 0 48
     default 8
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_D6
     int "DB6 GPIO"
+    range 0 48
     default 9
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_D7
     int "DB7 GPIO"
+    range 0 48
     default 10
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_CS
     int "CS GPIO"
+    range 0 48
     default 11
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_DC
     int "D/C GPIO"
+    range 0 48
     default 12
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_WR
     int "WR GPIO"
+    range 0 48
     default 13
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_RD
-    int "RD GPIO (reserved; not driven by this write-only test)"
+    int "RD GPIO (held high by this write-only test)"
+    range 0 48
     default 14
+    help
+        ESP32-S3 GPIO number. Firmware drives RD high and rejects unavailable,
+        input-only, or duplicate assignments at startup.
 config HMI_LCD_PIN_RESET
     int "RESET GPIO"
+    range 0 48
     default 15
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 config HMI_LCD_PIN_BACKLIGHT
     int "BL_ON/OFF GPIO"
+    range 0 48
     default 16
+    help
+        ESP32-S3 GPIO number. Firmware rejects unavailable, input-only, or
+        duplicate assignments at startup.
 
 endmenu
 endmenu

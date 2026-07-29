@@ -11,7 +11,12 @@ With the 8-bit wiring below plus a capacitive touch panel, **9 GPIOs remain free
 * **Backlight jumper (datasheet §4.4):** `J3 short, J4 open` routes backlight control to the **external** BL_ON/OFF signal on JP2 pin 39 — this is what the wiring below assumes, and it is the factory default. If a board arrives with `J4 short, J3 open`, the SSD1963 drives the backlight internally and pin 39 will do nothing.
 
 ### Throughput expectation
-A full 800x480 frame at 16bpp is 768 KB, which in 8-bit mode is ~1.54 M bus write cycles. At a 20 MHz PCLK that is roughly **13 fps full-screen**. This is fine for an HMI built on partial/dirty-rectangle updates, but full-screen animation is not on the table with this interface.
+The SSD1963 8-bit pixel interface consumes three ordered R/G/B bytes per pixel.
+A full 800x480 frame is therefore 1,152,000 data bytes and the same number of
+bus write cycles. At a 20 MHz write clock, the theoretical ceiling is about
+**17.4 full frames/s** before command and driver overhead. This is not a
+measured frame rate; use partial/dirty-rectangle updates and verify the actual
+throughput on hardware.
 
 ---
 
@@ -63,6 +68,7 @@ The ESP32-S3 has a flexible IO matrix, meaning you can assign these functions to
 | Signal | Resistor | Reason |
 | :--- | :--- | :--- |
 | /CS (GPIO 11) | 10 kΩ pull-**up** to 3.3V | Holds the display deselected during boot; prevents spurious bus cycles while the data lines float. |
+| /RD (GPIO 14) | 10 kΩ pull-**up** to 3.3V | Holds the read strobe inactive during boot. The write-only firmware also drives this pin high before enabling the i80 bus. |
 | BL_ON/OFF (GPIO 16) | 10 kΩ pull-**down** to GND | Prevents an indeterminate backlight state at power-on — typically a full-brightness flash before firmware takes over. Invert if your backlight driver is active-low. |
 
 **Series damping.** Put **22–33 Ω** in series on WR and on each of DB0–DB7, close to the ESP32-S3. See the logic-level note below — the abs-max rating leaves no headroom for ringing.

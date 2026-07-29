@@ -6,9 +6,8 @@
  */
 #include <stdbool.h>
 #include <stdint.h>
-#include <assert.h>
 #include <inttypes.h>
-#include <string.h>
+#include <stdlib.h>
 
 #include "driver/gpio.h"
 #include "esp_check.h"
@@ -23,19 +22,49 @@
 #define LCD_WIDTH  800
 #define LCD_HEIGHT 480
 #define DRAW_LINES 20
-#define DRAW_BUFFER_BYTES (LCD_WIDTH * DRAW_LINES * sizeof(uint16_t))
+#define LCD_BYTES_PER_PIXEL 3
+#define DRAW_BUFFER_BYTES (LCD_WIDTH * DRAW_LINES * LCD_BYTES_PER_PIXEL)
 
-#define RGB565(r, g, b) \
-    ((uint16_t)((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3)))
+#define LCD_HT_REG  0x041F
+#define LCD_HPS     0x00D2
+#define LCD_HPW_REG 0x00
+#define LCD_LPS     0x0000
+#define LCD_VT_REG  0x020C
+#define LCD_VPS     0x0022
+#define LCD_VPW_REG 0x00
+#define LCD_FPS     0x0000
+
+#define LCD_HT  (LCD_HT_REG + 1)
+#define LCD_HPW (LCD_HPW_REG + 1)
+#define LCD_VT  (LCD_VT_REG + 1)
+#define LCD_VPW (LCD_VPW_REG + 1)
+
+_Static_assert(LCD_HT > LCD_WIDTH, "horizontal total must exceed active width");
+_Static_assert(LCD_VT > LCD_HEIGHT, "vertical total must exceed active height");
+_Static_assert(LCD_HPS >= LCD_HPW, "horizontal sync must fit before active data");
+_Static_assert(LCD_VPS >= LCD_VPW, "vertical sync must fit before active data");
+_Static_assert(LCD_HT > LCD_HPS + LCD_WIDTH,
+               "horizontal timing must leave a front porch");
+_Static_assert(LCD_VT > LCD_VPS + LCD_HEIGHT,
+               "vertical timing must leave a front porch");
 
 static const char *TAG = "er_tft050_test";
+
+typedef struct {
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+} rgb888_t;
+
+_Static_assert(sizeof(rgb888_t) == LCD_BYTES_PER_PIXEL,
+               "RGB888 pixels must be exactly three bytes");
 
 typedef struct {
     int data[8];
     int cs;
     int dc;
     int wr;
-    int rd;       // Kept in the map for wiring traceability; ESP-IDF i80 is TX-only.
+    int rd;       // Held inactive; ESP-IDF i80 is TX-only.
     int reset;
     int backlight;
     bool backlight_active_high;
@@ -61,7 +90,49 @@ static const display_pins_t pin_map = {
 
 static esp_lcd_panel_io_handle_t lcd_io;
 static SemaphoreHandle_t color_done;
-static uint16_t *draw_buffer;
+static uint8_t *draw_buffer;
+
+static void fail_startup(const char *reason)
+{
+    ESP_LOGE(TAG, "%s", reason);
+    abort();
+}
+
+static void validate_output_gpio(const char *signal, int gpio)
+{
+    if (!GPIO_IS_VALID_OUTPUT_GPIO(gpio)) {
+        ESP_LOGE(TAG, "%s uses invalid or non-output GPIO %d", signal, gpio);
+        abort();
+    }
+}
+
+static void validate_pin_map(void)
+{
+    static const char *const names[] = {
+        "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7",
+        "CS", "D/C", "WR", "RD", "RESET", "BACKLIGHT",
+    };
+    const int pins[] = {
+        pin_map.data[0], pin_map.data[1], pin_map.data[2], pin_map.data[3],
+        pin_map.data[4], pin_map.data[5], pin_map.data[6], pin_map.data[7],
+        pin_map.cs, pin_map.dc, pin_map.wr, pin_map.rd, pin_map.reset,
+        pin_map.backlight,
+    };
+    const size_t pin_count = sizeof(pins) / sizeof(pins[0]);
+
+    _Static_assert(sizeof(names) / sizeof(names[0]) == sizeof(pins) / sizeof(pins[0]),
+                   "pin validation tables must match");
+
+    for (size_t i = 0; i < pin_count; ++i) {
+        validate_output_gpio(names[i], pins[i]);
+        for (size_t j = 0; j < i; ++j) {
+            if (pins[i] == pins[j]) {
+                ESP_LOGE(TAG, "%s and %s both use GPIO %d", names[j], names[i], pins[i]);
+                abort();
+            }
+        }
+    }
+}
 
 static bool color_transfer_done(esp_lcd_panel_io_handle_t io,
                                 esp_lcd_panel_io_event_data_t *edata,
@@ -81,6 +152,7 @@ static void lcd_command(uint8_t command, const uint8_t *data, size_t data_len)
 
 static void configure_output(int gpio, int level)
 {
+    validate_output_gpio("output", gpio);
     const gpio_config_t config = {
         .pin_bit_mask = 1ULL << gpio,
         .mode = GPIO_MODE_OUTPUT,
@@ -108,17 +180,38 @@ static void reset_panel(void)
 
 static void init_ssd1963(void)
 {
-    // Values are for the 800x480 panel; the input pixel format is RGB565.
-    const uint8_t pll_mn[] = {0x23, 0x02, 0x04};
+    /*
+     * Provisional panel timing from TFT_eSPI's SSD1963_800BD_DRIVER sequence,
+     * which is marked as copied from BuyDisplay code. The exact
+     * ER-TFT050-6-5654 module datasheet does not publish this tuple, so the
+     * PLL, pixel clock, sync polarity, and porch values still require bench
+     * and logic-analyzer confirmation.
+     *
+     * Decoded SSD1963 timing (register values are zero-based where noted):
+     *   PLL: 10 MHz reference, M=35, N=2 -> 120 MHz system clock
+     *   PCLK: LCDC_FPR=0x33333 -> about 24 MHz
+     *   active: 800 x 480; total: 1056 x 525
+     *   horizontal: HPS=210, HPW=1, LPS=0; derived back/front porches 209/46
+     *   vertical:   VPS=34,  VPW=1, FPS=0; derived back/front porches 33/11
+     */
+    const uint8_t pll_mn[] = {0x23, 0x02, 0x54};
     const uint8_t pll_enable[] = {0x01};
     const uint8_t pll_use[] = {0x03};
-    const uint8_t lshift_freq[] = {0x03, 0xFF, 0xFF};
-    const uint8_t lcd_mode[] = {0x24, 0x00, 0x03, 0x1F, 0x01, 0xDF, 0x00};
-    const uint8_t h_period[] = {0x03, 0x5F, 0x00, 0x2E, 0x00, 0x46, 0x00, 0x00};
-    const uint8_t v_period[] = {0x01, 0xDF, 0x00, 0x16, 0x00, 0x0C, 0x00, 0x00};
+    const uint8_t lshift_freq[] = {0x03, 0x33, 0x33};
+    const uint8_t lcd_mode[] = {0x20, 0x00, 0x03, 0x1F, 0x01, 0xDF, 0x00};
+    const uint8_t h_period[] = {
+        (uint8_t)(LCD_HT_REG >> 8), (uint8_t)LCD_HT_REG,
+        (uint8_t)(LCD_HPS >> 8), (uint8_t)LCD_HPS,
+        LCD_HPW_REG, (uint8_t)(LCD_LPS >> 8), (uint8_t)LCD_LPS, 0x00,
+    };
+    const uint8_t v_period[] = {
+        (uint8_t)(LCD_VT_REG >> 8), (uint8_t)LCD_VT_REG,
+        (uint8_t)(LCD_VPS >> 8), (uint8_t)LCD_VPS,
+        LCD_VPW_REG, (uint8_t)(LCD_FPS >> 8), (uint8_t)LCD_FPS,
+    };
     const uint8_t gpio_conf[] = {0x0F, 0x01};
     const uint8_t gpio_value[] = {0x01};
-    const uint8_t pixel_format[] = {0x03}; // 16-bit 5:6:5 MCU input
+    const uint8_t pixel_format[] = {0x00};
     const uint8_t address_mode[] = {0x00};
 
     lcd_command(0xE2, pll_mn, sizeof(pll_mn));
@@ -134,6 +227,8 @@ static void init_ssd1963(void)
     lcd_command(0xB6, v_period, sizeof(v_period));
     lcd_command(0xB8, gpio_conf, sizeof(gpio_conf));
     lcd_command(0xBA, gpio_value, sizeof(gpio_value));
+    // 8-bit interface, 3 bytes/pixel; SSD1963 rev 1.6 §7.1.4,
+    // Table 7-1 and §9.74.
     lcd_command(0xF0, pixel_format, sizeof(pixel_format));
     lcd_command(0x36, address_mode, sizeof(address_mode));
     lcd_command(0x29, NULL, 0);             // Display on
@@ -150,17 +245,21 @@ static void set_window(uint16_t x, uint16_t y, uint16_t width, uint16_t height)
 }
 
 static void write_solid_rect(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
-                             uint16_t color)
+                             rgb888_t color)
 {
     set_window(x, y, width, height);
     for (uint16_t row = 0; row < height;) {
         const uint16_t lines = (height - row) > DRAW_LINES ? DRAW_LINES : height - row;
         const size_t pixel_count = width * lines;
         for (size_t i = 0; i < pixel_count; ++i) {
-            draw_buffer[i] = color;
+            const size_t offset = i * LCD_BYTES_PER_PIXEL;
+            draw_buffer[offset] = color.red;
+            draw_buffer[offset + 1] = color.green;
+            draw_buffer[offset + 2] = color.blue;
         }
         ESP_ERROR_CHECK(esp_lcd_panel_io_tx_color(lcd_io, row == 0 ? 0x2C : 0x3C,
-                                                   draw_buffer, pixel_count * sizeof(uint16_t)));
+                                                   draw_buffer,
+                                                   pixel_count * LCD_BYTES_PER_PIXEL));
         xSemaphoreTake(color_done, portMAX_DELAY);
         row += lines;
     }
@@ -168,10 +267,9 @@ static void write_solid_rect(uint16_t x, uint16_t y, uint16_t width, uint16_t he
 
 static void show_color_bars(void)
 {
-    static const uint16_t colors[] = {
-        RGB565(255, 255, 255), RGB565(255, 255, 0), RGB565(0, 255, 255),
-        RGB565(0, 255, 0), RGB565(255, 0, 255), RGB565(255, 0, 0),
-        RGB565(0, 0, 255), RGB565(0, 0, 0),
+    static const rgb888_t colors[] = {
+        {255, 255, 255}, {255, 255, 0}, {0, 255, 255}, {0, 255, 0},
+        {255, 0, 255}, {255, 0, 0}, {0, 0, 255}, {0, 0, 0},
     };
     const uint16_t bar_width = LCD_WIDTH / (sizeof(colors) / sizeof(colors[0]));
     for (size_t i = 0; i < sizeof(colors) / sizeof(colors[0]); ++i) {
@@ -187,7 +285,7 @@ static void show_checkerboard(void)
         for (uint16_t x = 0; x < LCD_WIDTH; x += square_width) {
             const bool light = ((x / square_width) + (y / square_height)) & 1;
             write_solid_rect(x, y, square_width, square_height,
-                             light ? RGB565(190, 190, 190) : RGB565(20, 20, 20));
+                             light ? (rgb888_t){190, 190, 190} : (rgb888_t){20, 20, 20});
         }
     }
 }
@@ -196,7 +294,7 @@ static void show_gray_ramp(void)
 {
     for (uint16_t x = 0; x < LCD_WIDTH; x += 20) {
         const uint8_t value = (uint32_t)x * 255 / (LCD_WIDTH - 20);
-        write_solid_rect(x, 0, 20, LCD_HEIGHT, RGB565(value, value, value));
+        write_solid_rect(x, 0, 20, LCD_HEIGHT, (rgb888_t){value, value, value});
     }
 }
 
@@ -204,9 +302,12 @@ static void init_lcd_bus(void)
 {
     configure_output(pin_map.backlight, !pin_map.backlight_active_high);
     configure_output(pin_map.cs, 1); // Keep the panel deselected through boot.
+    configure_output(pin_map.rd, 1); // TX-only bus: hold the active-low read strobe inactive.
 
     color_done = xSemaphoreCreateBinary();
-    assert(color_done != NULL);
+    if (color_done == NULL) {
+        fail_startup("failed to allocate color-transfer semaphore");
+    }
 
     esp_lcd_i80_bus_handle_t i80_bus;
     const esp_lcd_i80_bus_config_t bus_config = {
@@ -237,21 +338,19 @@ static void init_lcd_bus(void)
         },
         .lcd_cmd_bits = 8,
         .lcd_param_bits = 8,
-        .flags = {
-            .swap_color_bytes = CONFIG_HMI_LCD_SWAP_COLOR_BYTES,
-            .pclk_idle_low = 1,
-            .pclk_active_neg = 1,
-        },
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_i80(i80_bus, &io_config, &lcd_io));
     draw_buffer = esp_lcd_i80_alloc_draw_buffer(lcd_io, DRAW_BUFFER_BYTES, MALLOC_CAP_DMA);
-    assert(draw_buffer != NULL);
+    if (draw_buffer == NULL) {
+        fail_startup("failed to allocate DMA draw buffer");
+    }
 }
 
 void app_main(void)
 {
+    validate_pin_map();
     ESP_LOGI(TAG, "ER-TFT050 SSD1963 display test starting");
-    ESP_LOGI(TAG, "D0..D7=%d,%d,%d,%d,%d,%d,%d,%d CS=%d DC=%d WR=%d RD(reserved)=%d RST=%d BL=%d @ %" PRIu32 " Hz",
+    ESP_LOGI(TAG, "D0..D7=%d,%d,%d,%d,%d,%d,%d,%d CS=%d DC=%d WR=%d RD(held high)=%d RST=%d BL=%d @ %" PRIu32 " Hz",
              pin_map.data[0], pin_map.data[1], pin_map.data[2], pin_map.data[3],
              pin_map.data[4], pin_map.data[5], pin_map.data[6], pin_map.data[7],
              pin_map.cs, pin_map.dc, pin_map.wr, pin_map.rd, pin_map.reset,

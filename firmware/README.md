@@ -8,15 +8,16 @@ external display library is required.
 ## What it tests
 
 The firmware resets the SSD1963 with the backlight off, initializes its
-800x480 RGB565 interface, enables the backlight, then continuously shows:
+800x480 8-bit pixel interface, sends each pixel as ordered red, green, and blue
+bytes, enables the backlight, then continuously shows:
 
 - eight vertical colour bars (data-bit order and primary colours);
-- a grayscale ramp (all RGB565 bits);
+- a grayscale ramp (all RGB byte values);
 - an 80x60 checkerboard (address window / rectangle updates).
 
-Serial logs print the effective GPIO map and write clock. RD remains in the
-configuration for traceability, but ESP-IDF's LCD_CAM i80 driver is TX-only;
-this first test does not read the controller ID.
+Serial logs print the effective GPIO map and write clock. ESP-IDF's LCD_CAM
+i80 driver is TX-only, so RD is driven and held high; this first test does not
+read the controller ID.
 
 ## Pin-map configuration
 
@@ -31,8 +32,8 @@ idf.py menuconfig
 ```
 
 Open `ER-TFT050 display test` → `Display GPIO map`. The same menu also exposes
-the 8080 write clock (10 MHz conservative default), RGB565 byte order, and
-backlight polarity. Rebuild and flash after a change:
+the 8080 write clock (10 MHz conservative default) and backlight polarity.
+Rebuild and flash after a change:
 
 ```sh
 idf.py build flash monitor
