@@ -1,0 +1,68 @@
+menu "ER-TFT050 display test"
+
+config HMI_LCD_PCLK_HZ
+    int "8080 write clock (Hz)"
+    range 1000000 20000000
+    default 10000000
+    help
+        Start at 10 MHz for bring-up. Raise only after the wiring is stable.
+
+config HMI_LCD_SWAP_COLOR_BYTES
+    bool "Swap RGB565 byte order on the 8-bit bus"
+    default y
+    help
+        The ESP32-S3 is little-endian and the SSD1963 expects RGB565 MSB first.
+
+config HMI_LCD_BACKLIGHT_ACTIVE_HIGH
+    bool "Backlight enable is active high"
+    default y
+    help
+        Default for the external BL_ON/OFF jumper configuration in the wiring guide.
+
+menu "Display GPIO map"
+
+config HMI_LCD_PIN_D0
+    int "DB0 GPIO"
+    default 2
+config HMI_LCD_PIN_D1
+    int "DB1 GPIO"
+    default 4
+config HMI_LCD_PIN_D2
+    int "DB2 GPIO"
+    default 5
+config HMI_LCD_PIN_D3
+    int "DB3 GPIO"
+    default 6
+config HMI_LCD_PIN_D4
+    int "DB4 GPIO"
+    default 7
+config HMI_LCD_PIN_D5
+    int "DB5 GPIO"
+    default 8
+config HMI_LCD_PIN_D6
+    int "DB6 GPIO"
+    default 9
+config HMI_LCD_PIN_D7
+    int "DB7 GPIO"
+    default 10
+config HMI_LCD_PIN_CS
+    int "CS GPIO"
+    default 11
+config HMI_LCD_PIN_DC
+    int "D/C GPIO"
+    default 12
+config HMI_LCD_PIN_WR
+    int "WR GPIO"
+    default 13
+config HMI_LCD_PIN_RD
+    int "RD GPIO (reserved; not driven by this write-only test)"
+    default 14
+config HMI_LCD_PIN_RESET
+    int "RESET GPIO"
+    default 15
+config HMI_LCD_PIN_BACKLIGHT
+    int "BL_ON/OFF GPIO"
+    default 16
+
+endmenu
+endmenu

@@ -1,0 +1,5 @@
+# ESP-IDF generated output and local configuration
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
