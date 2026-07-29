@@ -64,7 +64,7 @@ python3 -m pip install --upgrade esptool pyserial
 Check that `esptool` works:
 
 ```sh
-esptool.py version
+python3 -m esptool version
 ```
 
 ## Find the serial port
@@ -112,13 +112,13 @@ Erasing is recommended before switching between unrelated firmware images.
 Windows example:
 
 ```cmd
-esptool.py --chip esp32s3 --port COM5 erase_flash
+py -m esptool --chip esp32s3 --port COM5 erase_flash
 ```
 
 Linux/macOS example:
 
 ```sh
-esptool.py --chip esp32s3 --port /dev/ttyACM0 erase_flash
+python3 -m esptool --chip esp32s3 --port /dev/ttyACM0 erase_flash
 ```
 
 Replace the port with the one found on your machine.
@@ -136,7 +136,7 @@ The ESP-IDF default flash offsets are:
 Windows `cmd.exe`:
 
 ```cmd
-esptool.py ^
+py -m esptool ^
   --chip esp32s3 ^
   --port COM5 ^
   --baud 921600 ^
@@ -149,7 +149,7 @@ esptool.py ^
 Linux/macOS:
 
 ```sh
-esptool.py \
+python3 -m esptool \
   --chip esp32s3 \
   --port /dev/ttyACM0 \
   --baud 921600 \
@@ -216,11 +216,11 @@ The local build outputs equivalent images at:
 
 ## Create a release ZIP
 
-Maintainers can build and package the firmware with:
+Maintainers can run a non-mutating build/package check with:
 
 ```sh
 source ~/espressif/esp-idf-v5.5/export.sh
-firmware/tools/release_firmware.sh --tag v0.1.0
+firmware/tools/release_firmware.sh --tag v0.1.0 --check
 ```
 
 The script validates that the generated ESP-IDF flash metadata targets
@@ -232,16 +232,22 @@ is written to:
 firmware/dist/ssd1963-er-tft050-esp32s3-pico-v0.1.0.zip
 ```
 
-To upload the ZIP to GitHub as a draft release asset:
+When the check passes and the `ssd_1963` working tree is clean, create and push
+an annotated git tag and upload the ZIP to GitHub as a draft release asset:
 
 ```sh
-firmware/tools/release_firmware.sh --tag v0.1.0 --upload
+firmware/tools/release_firmware.sh --tag v0.1.0 --create-tag --push-tag --upload
 ```
+
+By default, the tag is pushed to git remote `origin` and the GitHub release is
+created under `skrcta/ssd_1963`. If either is changed with `--remote` or
+`--repo`, the script verifies that both resolve to the same repository before
+tagging or uploading.
 
 To create a published release instead of a draft:
 
 ```sh
-firmware/tools/release_firmware.sh --tag v0.1.0 --upload --publish
+firmware/tools/release_firmware.sh --tag v0.1.0 --create-tag --push-tag --upload --publish
 ```
 
 ## Board reference
