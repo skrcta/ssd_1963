@@ -12,8 +12,8 @@ ESP32-S3 Pico through an 8-bit 8080 parallel interface.
 
 ## Repository contents
 
-- [`firmware/`](firmware/) — ESP-IDF v5.5 test application. Its pin map,
-  backlight polarity, and write clock are configurable in `idf.py menuconfig`.
+- [`firmware/README.md`](firmware/README.md) — ESP-IDF v5.5 test application,
+  including `idf.py menuconfig` wiring/pin-map configuration.
 - [`firmware/HOWTO.md`](firmware/HOWTO.md) — flashing prebuilt firmware on the
   Waveshare ESP32-S3-Pico without installing ESP-IDF.
 - [`wiring_guide_esp32s3.md`](wiring_guide_esp32s3.md) — required wiring,
