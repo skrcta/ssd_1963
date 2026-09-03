@@ -116,3 +116,45 @@ config HMI_LCD_PIN_BACKLIGHT
 
 endmenu
 endmenu
+
+menu "RS-485"
+
+    config HMI_RS485_UART_NUM
+        int "UART peripheral number (1 or 2)"
+        range 1 2
+        default 1
+        help
+            UART0 pins (GPIO 43/44) are not exposed on the Pico headers.
+
+    config HMI_RS485_TXD_GPIO
+        int "TXD GPIO (to transceiver DI)"
+        range 0 48
+        default 36
+        help
+            Must be output-capable. Firmware rejects unavailable, input-only,
+            or duplicate assignments at startup.
+
+    config HMI_RS485_RXD_GPIO
+        int "RXD GPIO (from transceiver RO)"
+        range 0 48
+        default 37
+        help
+            Firmware rejects unavailable or duplicate assignments at startup.
+
+    config HMI_RS485_DIR_GPIO
+        int "DIR GPIO (to transceiver DE & RE!)"
+        range 0 48
+        default 35
+        help
+            Must be output-capable. Driven by UART RTS, not by application
+            code. Firmware rejects unavailable, input-only, or duplicate
+            assignments at startup.
+
+    config HMI_RS485_BAUD_RATE
+        int "Baud rate"
+        range 1200 460800
+        default 9600
+        help
+            Standard Modbus RTU baud rates: 9600, 19200, 38400, 115200.
+
+endmenu
