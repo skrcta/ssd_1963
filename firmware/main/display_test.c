@@ -19,6 +19,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "rs485.h"
+#include "rs485_echo.h"
 
 #define LCD_WIDTH  800
 #define LCD_HEIGHT 480
@@ -538,6 +539,7 @@ void app_main(void)
 {
     validate_pin_map();
     ESP_ERROR_CHECK(rs485_init());
+    ESP_ERROR_CHECK(rs485_echo_start());
     ESP_LOGI(TAG, "ER-TFT050 SSD1963 display test starting");
     ESP_LOGI(TAG, "D0..D7=%d,%d,%d,%d,%d,%d,%d,%d CS=%d DC=%d WR=%d RD(held high)=%d RST=%d BL=%d @ %" PRIu32 " Hz",
              pin_map.data[0], pin_map.data[1], pin_map.data[2], pin_map.data[3],
