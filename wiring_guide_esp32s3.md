@@ -5,7 +5,7 @@ This document provides a recommended wiring scheme to connect the ER-TFT050-6-56
 ## Interface Strategy: 8-Bit 8080 Parallel
 The ESP32-S3 Pico exposes 27 GPIOs. A 16-bit interface would need 22 of them (16 data + 6 control), leaving only 5 — not enough for the touch panel and a Modbus UART. **8-bit 8080 parallel mode** is therefore the only practical choice.
 
-With the 8-bit wiring below plus a capacitive touch panel, **9 GPIOs remain free** (GP1, GP35–GP42) — enough for an RS-485 Modbus port and spares.
+With the 8-bit wiring below plus a capacitive touch panel and the RS-485 port described in §4, **6 GPIOs remain free** (GP1, GP38–GP42).
 
 * **Hardware configuration (datasheet §4.4):** 8080 mode requires **R3=0Ω, R4 No Connection**. This is the factory default, so no rework is normally needed. (6800 mode is the inverse: R4=0Ω, R3 NC.)
 * **Backlight jumper (datasheet §4.4):** `J3 short, J4 open` routes backlight control to the **external** BL_ON/OFF signal on JP2 pin 39 — this is what the wiring below assumes, and it is the factory default. If a board arrives with `J4 short, J3 open`, the SSD1963 drives the backlight internally and pin 39 will do nothing.
@@ -101,6 +101,42 @@ Choose the wiring based on the type of touch panel your display has (Capacitive 
 
 ---
 
+## 4. RS-485 Connections
+
+The RS-485 transceiver is wired to three adjacent pins on the right-side header.
+
+| Signal | Transceiver Pin | ESP32-S3 GPIO | Physical Header | Description |
+| :----- | :-------------- | :------------ | :-------------- | :---------- |
+| TXD    | DI (Driver Input) | GPIO 36 | Right Side (Pin 15) | Data to transceiver |
+| RXD    | RO (Receiver Output) | GPIO 37 | Right Side (Pin 16) | Data from transceiver |
+| DIR    | DE & RE! (tied together) | GPIO 35 | Right Side (Pin 14) | Direction control — driven by UART RTS |
+
+> [!NOTE]
+> **Half-duplex wiring.** DE and RE! are tied together, so a single GPIO
+> controls direction: **HIGH = transmit, LOW = receive.** The ESP-IDF UART
+> driver in `UART_MODE_RS485_HALF_DUPLEX` asserts this pin automatically via the
+> RTS function — no application-level toggling is needed.
+
+> [!WARNING]
+> GPIO 35 is RTP PEN if a **resistive** touch panel is fitted (§3 Option B).
+> This wiring assumes a **capacitive** panel. RTP + RS-485 simultaneously
+> requires reassigning DIR to GP38, which leaves only **5 GPIOs free**
+> (GP1, GP39–GP42) rather than the 6 quoted in the intro and Quick Reference.
+
+### Bus termination and bias
+
+- **120 Ω termination resistor** at each physical end of the RS-485 bus. Omit
+  only for very short runs (< 1 m) at low baud rates.
+- **Fail-safe bias resistors.** When all drivers on the bus are idle (high-Z),
+  the differential pair floats and the receiver outputs noise — typically
+  presenting as framing errors on the first received byte. Half-duplex Modbus
+  segments normally need pull-up on A and pull-down on B (typically 560 Ω–1 kΩ)
+  at one point on the bus. Many transceiver breakout boards already fit these
+  resistors — **check the board and record which case applies** before adding
+  external bias.
+
+---
+
 ## Notes for Software Setup & Bring-up
 When configuring your display library and initializing the hardware:
 1. **Driver:** SSD1963
@@ -115,7 +151,7 @@ When configuring your display library and initializing the hardware:
    * Test both write and read cycles
 
 ### UART availability
-GPIO 43/44 — the ESP32-S3 default UART0 pins — are **not** brought out to the Pico headers. Any Modbus RTU / RS-485 port must be routed through the GPIO matrix to spare pins (see the free-pin row in the Quick Reference below).
+GPIO 43/44 — the ESP32-S3 default UART0 pins — are **not** brought out to the Pico headers. The RS-485 / Modbus RTU port uses UART1 routed through the GPIO matrix to GP35–GP37 — see §4 above.
 
 ---
 
@@ -149,9 +185,10 @@ GPIO 43/44 — the ESP32-S3 default UART0 pins — are **not** brought out to th
 | Backlight | GPIO16 |
 | Touch (CTP: SDA / SCL / INT / RST) | GPIO17 / 18 / 33 / 34 |
 | Touch (RTP: CS / CLK / DIN / DOUT / PEN) | GPIO17 / 18 / 33 / 34 / 35 |
-| **Free for application use** | GP1, GP35*–GP42 |
+| RS-485 (DIR / TXD / RXD) | GPIO35 / 36 / 37 |
+| **Free for application use** | GP1, GP38–GP42 (GP35* free only without RS-485) |
 
-\* GP35 is free only with a capacitive panel; RTP uses it for PEN.
+\* GP35 is free only with a capacitive panel **and** no RS-485 wiring; RTP uses it for PEN, RS-485 uses it for DIR.
 
 ### Sources
 Verified against `Datasheets/ER-TFT050-6-5654_Datasheet.pdf` (§4.1 pin configuration, §4.4 jump points, §4.5–4.6 electrical characteristics) and the Waveshare board pinout in `Assets/ESP32-S3-Pico-details-inter-1.jpg`.
