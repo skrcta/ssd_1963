@@ -19,6 +19,15 @@ Serial logs print the effective GPIO map and write clock. ESP-IDF's LCD_CAM
 i80 driver is TX-only, so RD is driven and held high; this first test does not
 read the controller ID.
 
+It also starts an **RS-485 echo task**, which receives bytes on the bus, logs
+them as hex, and echoes them back. This validates wiring, baud rate, and
+direction control without a Modbus stack. The task starts unconditionally on
+every boot and holds UART1 and GPIO 35/36/37 whether or not a transceiver is
+attached. Testing it requires a USB-to-RS-485 adapter as a partner on the bus —
+DE and RE! are tied together, so the board cannot hear its own transmission and
+a self-loopback will not work. See
+[Test the RS-485 port](HOWTO.md#test-the-rs-485-port) for the procedure.
+
 ## Pin-map configuration
 
 The defaults match the wiring guide: DB0..DB7 = GPIO 2, 4..10; CS/DC/WR/RD =
@@ -73,3 +82,32 @@ silently driving the wrong pins.
 
 Hardware remains as specified in the guide: R3 fitted/R4 open (8080), J3
 fitted/J4 open (external backlight), and J8 open for a 5 V display supply.
+
+## RS-485 configuration
+
+`RS-485` is a **top-level** menuconfig menu — it sits alongside
+`ER-TFT050 display test`, not inside it.
+
+| Menu entry | Signal | Default |
+| --- | --- | --- |
+| `UART peripheral number (1 or 2)` | — | UART1 |
+| `TXD GPIO (to transceiver DI)` | DI | GPIO 36 |
+| `RXD GPIO (from transceiver RO)` | RO | GPIO 37 |
+| `DIR GPIO (to transceiver DE & RE!)` | DE & RE! | GPIO 35 |
+| `Baud rate` | — | 9600 |
+
+UART0 is not an option: its default pins (GPIO 43/44) are not brought out to the
+Pico headers.
+
+The direction pin is driven by the UART's RTS function in
+`UART_MODE_RS485_HALF_DUPLEX`, not by application code, so it needs no
+firmware-level toggling. Duplicate or input-only assignments are rejected at
+compile time by static assertions covering the RS-485 pins against each other
+and against every display pin.
+
+Baud rate accepts 1200 to 460800. If you raise it, note that the echo task's
+end-of-frame window is a fixed 50 ms and does not scale with baud — fine at any
+supported rate, but not tuned for the fastest ones.
+
+Defaults match §4 of the wiring guide. GPIO 35 is shared with RTP PEN if a
+resistive touch panel is fitted; see the warning in that section.

@@ -4,7 +4,9 @@
 > **The firmware has not yet been tested on physical hardware.**
 > It builds against ESP-IDF v5.5, but display initialization, colour order,
 > timing, backlight polarity, and the supplied pin map still require bench
-> validation with the wired ESP32-S3 Pico and ER-TFT050-6-5654 display.
+> validation with the wired ESP32-S3 Pico and ER-TFT050-6-5654 display. The
+> RS-485 port is likewise unvalidated and additionally needs a USB-to-RS-485
+> adapter to test.
 
 This repository contains a diagnostic firmware project for an
 ER-TFT050-6-5654 (800x480, SSD1963) display connected to a Waveshare
@@ -36,3 +38,7 @@ idf.py build flash monitor
 The firmware should cycle through vertical colour bars, a grayscale ramp, and
 an 80x60 checkerboard every three seconds. Treat the first result as a wiring
 and timing diagnostic, not proof of a production-ready display driver.
+
+The same build also runs an RS-485 echo task. Testing it needs a transceiver and
+a USB-to-RS-485 adapter — see
+[Test the RS-485 port](firmware/HOWTO.md#test-the-rs-485-port).
